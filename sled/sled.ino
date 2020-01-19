@@ -18,30 +18,12 @@ int red = 255;
 int green = 100;
 int blue = 50;
 
-//
-int mode = 0; //MODE -1 == off, 0 == rgb, 1 == fade
+//MODE -1 == off, 0 == rgb, 1 == fade
+int mode = 0;
 
 char serial_command_buffer_[32];
 SerialCommands serial_commands_(&Serial, serial_command_buffer_, sizeof(serial_command_buffer_), "\r\n", " ");
 
-SerialCommand cmd_rgba_("RGBA", cmd_rgba);
-SerialCommand cmd_off_("OFF", cmd_off);
-SerialCommand cmd_fade_("FADE", cmd_fade);
-
-
-void setup() {
-  Serial.begin(9600);
-  analogWrite(rPin, red);
-  analogWrite(gPin, green);
-  analogWrite(bPin, blue);
-
-  serial_commands_.SetDefaultHandler(cmd_unrecognized);
-  serial_commands_.AddCommand(&cmd_rgba_);
-  serial_commands_.AddCommand(&cmd_off_);
-  serial_commands_.AddCommand(&cmd_fade_);
-  
-  Serial.println("Ready!");
-}
 
 //This is the default handler, and gets called when no other command matches. 
 void cmd_unrecognized(SerialCommands* sender, const char* cmd) {
@@ -75,7 +57,7 @@ void cmd_rgba (SerialCommands* sender) {
     sender->GetSerial()->println("ERROR: EXPECTED A");
     return;
   } int a = atoi(a_str);
-  if(sender->Next() != null){
+  if(sender->Next() != NULL){
     sender->GetSerial()->println("ERROR: TOO MANY ARGS");
     return;
   }
@@ -104,7 +86,7 @@ void cmd_rgba (SerialCommands* sender) {
 }
 
 void cmd_off (SerialCommands* sender) {
-  if(sender->Next() != null){
+  if(sender->Next() != NULL){
     sender->GetSerial()->println("ERROR: TOO MANY ARGS");
     return;
   }
@@ -156,7 +138,7 @@ void cmd_fade(SerialCommands* sender) {
     sender->GetSerial()->println("ERROR: EXPECTED T");
     return;
   } unsigned long t = strtoul(t_str, NULL, 10);
-  if(sender->Next() != null){
+  if(sender->Next() != NULL){
     sender->GetSerial()->println("ERROR: TOO MANY ARGS");
     return;
   }
@@ -196,21 +178,41 @@ void off(){
 }
 
 void fade(int r, int g, int b, unsigned long t){//same as set_rbg(r,b,g) with a time component 't' in milliseconds
-  unsigned long lastT = millis(); //Last tick
-  unsigned long stepD = millis() - lasT; //Step Duration
-  while (mode == 1) {
-    if(millis() < lastT){lasT = millis();}//handle 50 hr clock overflow
-    stepD = millis() - lastT; // update step duration
-    if(stepD > t){ //new tick
-      if((lastT / t) % 2 == 1){//stepping up
-        set_rgb();
-      } else if((lastT / t) % 2 == 0) {//stepping down
-        set_rgb();
-      }
-      
+  unsigned long mark = millis();
+  unsigned long lastT = mark; //Last tick
+  unsigned long stepD = mark % t; //Step Duration
+  int rSpan = red - r;
+  int gSpan = green - g;
+  int bSpan = blue - b;
+  while (mode == 1){
+    mark = millis();
+    lastT = (mark / t) * t;
+    stepD = mark % t;
+    if((lastT / t) % 2 == 1){ //stepping up on odd ticks
+      set_rgb(red - (rSpan * stepD) / t, green - (gSpan * stepD) / t, blue - (bSpan * stepD) / t);
+    } else if((lastT / t) % 2 == 0){ //stepping down on even ticks
+      set_rgb(r + (rSpan * stepD) / t, g + (gSpan * stepD) / t, b + (bSpan * stepD) / t);
     }
     serial_commands_.ReadSerial();
   }
+}
+
+SerialCommand cmd_rgba_("RGBA", cmd_rgba);
+SerialCommand cmd_off_("OFF", cmd_off);
+SerialCommand cmd_fade_("FADE", cmd_fade);
+
+void setup() {
+  Serial.begin(9600);
+  analogWrite(rPin, red);
+  analogWrite(gPin, green);
+  analogWrite(bPin, blue);
+
+  serial_commands_.SetDefaultHandler(cmd_unrecognized);
+  serial_commands_.AddCommand(&cmd_rgba_);
+  serial_commands_.AddCommand(&cmd_off_);
+  serial_commands_.AddCommand(&cmd_fade_);
+  
+  Serial.println("Ready!");
 }
 
 void loop() {
